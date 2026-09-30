@@ -17,6 +17,58 @@ Create mods, trainers, security audits, game bots, accelerate RE, or do anything
 
 ---
 
+## 🇨🇳 中文说明(更新内容 · 使用方法)
+
+> 本仓库基于上游 [miscusi-peek/cheatengine-mcp-bridge](https://github.com/miscusi-peek/cheatengine-mcp-bridge)(v12.0.0,约 175 个 MCP 工具),保留其全部功能与提交历史,并新增:**自动编译发布(每次代码变更自动触发)**、中文更新日志、中文使用说明。
+
+### 更新内容
+
+完整中文更新日志见 **[CHANGELOG_zh.md](CHANGELOG_zh.md)**(最新更新在最上面,每次发布 Release 的中文说明也自动取自该文件)。
+
+### 使用方法(中文快速开始)
+
+1. **准备环境**:Windows 10/11、Cheat Engine 7.5+、Python 3.10+。
+2. **安装 Python 依赖**(在仓库目录执行):
+
+   ```bash
+   pip install -r MCP_Server/requirements.txt
+   ```
+
+3. **在 Cheat Engine 中加载 Lua 桥**(二选一):
+   - `File → Execute Script` 选择 `MCP_Server/ce_mcp_bridge.lua` 执行;或
+   - 在 CE 的 Lua 脚本里执行(dofile 方式,推荐,可避免变量过多报错):
+
+     ```lua
+     dofile([[C:\你的路径\cheatengine-mcp-bridge\MCP_Server\ce_mcp_bridge.lua]])
+     ```
+
+   成功标志:CE 输出 `[MCP v12.0.0] MCP Server Listening on: CE_MCP_Bridge_v99`。
+4. **在 AI 客户端注册 MCP 服务器**(ZCode / Claude Desktop / Cursor 等):
+
+   ```json
+   {
+     "mcpServers": {
+       "cheatengine": {
+         "command": "python",
+         "args": ["C:\\你的路径\\cheatengine-mcp-bridge\\MCP_Server\\mcp_cheatengine.py"]
+       }
+     }
+   }
+   ```
+
+   重启客户端后,它会自动通过 stdio 启动 Python MCP 服务器并连接 CE。
+5. **验证**:调用 `ping` 工具,返回 `"version": "12.0.0"` 即为端到端打通。
+6. **每次启动 CE 自动加载**:把上面的 dofile 那一行放进
+   `C:\Program Files\Cheat Engine\autorun\ce_mcp_autorun.lua` 即可(该目录下的 .lua 会在 CE 启动时自动执行)。
+
+### 安全须知(重要)
+
+- **务必关闭** Cheat Engine → Settings → Extra → **"Query memory region routines"**,否则配合 DBVM/反作弊扫描时可能触发 `CLOCK_WATCHDOG_TIMEOUT` 蓝屏。
+- 环境变量 `CE_MCP_ALLOW_SHELL=1` 会启用危险的 shell 执行工具,默认不要设置。
+- 仅用于授权的安全研究、自己的游戏存档研究或逆向学习。
+
+---
+
 ## The Problem
 
 You're staring at gigabytes of memory. Millions of addresses. Thousands of functions. Finding *that one pointer*, *that one structure* takes **days or weeks** of manual work.

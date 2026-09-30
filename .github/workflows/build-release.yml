@@ -1,0 +1,102 @@
+name: Build & Release (自动编译发布)
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (验证依赖可安装)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r MCP_Server/requirements.txt
+
+      - name: Compile check (Python 字节码编译检查)
+        run: python -m compileall -q MCP_Server
+
+      - name: Read version from Lua bridge (读取版本号)
+        id: ver
+        shell: pwsh
+        run: |
+          $m = Select-String -Path 'MCP_Server/ce_mcp_bridge.lua' -Pattern 'BRIDGE v([0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
+          $v = if ($m) { $m.Matches[0].Groups[1].Value } else { '0.0.0' }
+          $tag = "v$v-b${{ github.run_number }}"
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "ver=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "TAG=$tag  VER=$v"
+
+      - name: Package release zip (打包)
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          Compress-Archive -Path 'MCP_Server','AI_Context','README.md','CHANGELOG_zh.md','LICENSE' -DestinationPath "CE-MCP-$tag.zip"
+          Get-Item "CE-MCP-$tag.zip" | Select-Object Name, Length
+
+      - name: Build Chinese release notes (生成中文发布说明)
+        shell: python
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VER: ${{ steps.ver.outputs.ver }}
+        run: |
+          import os, subprocess
+
+          tag, ver = os.environ['TAG'], os.environ['VER']
+          notes = [f'# CE-MCP {tag}', '', '## 更新内容', '']
+
+          def git(*args):
+              return subprocess.run(['git', *args], capture_output=True, text=True).stdout
+
+          tags = [t for t in git('tag', '--sort=-creatordate').split() if t]
+          prev = tags[0] if tags else None
+          rng = f'{prev}..HEAD' if prev else 'HEAD'
+          changed = git('diff', '--name-only', rng).splitlines() if prev else git('ls-files').splitlines()
+
+          # If CHANGELOG_zh.md changed in this push, use its newest section as the notes
+          if 'CHANGELOG_zh.md' in changed:
+              parts = open('CHANGELOG_zh.md', encoding='utf-8').read().split('\n## ')
+              sec = ('## ' + parts[1]).strip() if len(parts) > 1 else ''
+              if sec:
+                  notes += [sec, '']
+
+          log = git('log', rng, '--pretty=- %s (%h)').strip() if prev else ''
+          if log:
+              notes += ['本次包含的提交:', '', log, '']
+
+          notes += [
+              '---',
+              '## 安装与使用(中文)',
+              '',
+              '解压后按 [README.md](https://github.com/zhengwuji/CE-MCP#-中文说明更新内容--使用方法) '
+              '的「使用方法(中文快速开始)」操作:安装依赖 → CE 加载 Lua 桥 → 客户端注册 MCP 服务器 → 调用 ping 验证。',
+              '',
+          ]
+          open('release_notes.md', 'w', encoding='utf-8').write('\n'.join(notes))
+          print('\n'.join(notes))
+
+      - name: Create Release (发布到 Releases)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          gh release create "$TAG" "CE-MCP-$TAG.zip" \
+            --title "CE-MCP $TAG (桥版本 v${{ steps.ver.outputs.ver }})" \
+            --notes-file release_notes.md
