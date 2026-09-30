@@ -32,6 +32,22 @@ jobs:
       - name: Compile check (Python 字节码编译检查)
         run: python -m compileall -q MCP_Server
 
+      - name: Build installer exe (编译一键安装器)
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          & $csc -nologo -codepage:65001 -target:winexe -platform:anycpu `
+            -out:CE-MCP-Setup.exe `
+            -win32manifest:installer\app.manifest `
+            -r:System.Windows.Forms.dll -r:System.Drawing.dll `
+            -resource:"MCP_Server\ce_mcp_bridge.lua,ce_mcp_bridge.lua" `
+            -resource:"MCP_Server\mcp_cheatengine.py,mcp_cheatengine.py" `
+            -resource:"MCP_Server\requirements.txt,requirements.txt" `
+            -resource:"AI_Context\MCP_Bridge_Command_Reference.md,MCP_Bridge_Command_Reference.md" `
+            installer\Installer.cs
+          if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
+          Get-Item CE-MCP-Setup.exe | Select-Object Name, Length
+
       - name: Read version from Lua bridge (读取版本号)
         id: ver
         shell: pwsh
@@ -84,8 +100,8 @@ jobs:
               '---',
               '## 安装与使用(中文)',
               '',
-              '解压后按 [README.md](https://github.com/zhengwuji/CE-MCP#-中文说明更新内容--使用方法) '
-              '的「使用方法(中文快速开始)」操作:安装依赖 → CE 加载 Lua 桥 → 客户端注册 MCP 服务器 → 调用 ping 验证。',
+              '一键安装:下载本页 `CE-MCP-Setup.exe` 双击运行(自动定位 Cheat Engine 目录;找不到时支持手动选择或解压到桌面手动放入)。',
+              '其余方式与详细说明见 [README.md](https://github.com/zhengwuji/CE-MCP#readme) 的「安装」与「使用方法」章节。',
               '',
           ]
           open('release_notes.md', 'w', encoding='utf-8').write('\n'.join(notes))
@@ -97,6 +113,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
-          gh release create "$TAG" "CE-MCP-$TAG.zip" \
+          gh release create "$TAG" "CE-MCP-Setup.exe" "CE-MCP-$TAG.zip" \
             --title "CE-MCP $TAG (桥版本 v${{ steps.ver.outputs.ver }})" \
             --notes-file release_notes.md
