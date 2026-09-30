@@ -71,14 +71,17 @@ jobs:
         env:
           TAG: ${{ steps.ver.outputs.tag }}
           VER: ${{ steps.ver.outputs.ver }}
+          PYTHONUTF8: '1'
         run: |
-          import os, subprocess
-
+          import os, subprocess, sys
+          sys.stdout.reconfigure(encoding='utf-8', errors='replace')
           tag, ver = os.environ['TAG'], os.environ['VER']
-          notes = [f'# CE-MCP {tag}', '', '## 更新内容', '']
 
           def git(*args):
-              return subprocess.run(['git', *args], capture_output=True, text=True).stdout
+              return subprocess.run(['git', *args], capture_output=True,
+                                    encoding='utf-8', errors='replace').stdout or ''
+
+          notes = [f'# CE-MCP {tag}', '', '## 更新内容', '']
 
           tags = [t for t in git('tag', '--sort=-creatordate').split() if t]
           prev = tags[0] if tags else None
